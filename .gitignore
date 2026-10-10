@@ -1,0 +1,18 @@
+# ข้อมูลผู้เล่น (โปรไฟล์/ล็อกอิน Guest) — ห้ามขึ้น git เด็ดขาด
+saved/
+Instance*/
+backups/
+
+# Electron runtime ของเกมทางการ (ไฟล์ใหญ่ + เป็นของบุคคลที่สาม) — สร้างเองตาม CLAUDE.md "Building from scratch"
+runtime/
+
+# การตั้งค่าส่วนตัวของแต่ละเครื่อง (launcher สร้างค่าเริ่มต้นให้เองถ้าไม่มี)
+config.json
+
+# shortcut มี path เต็มของเครื่องนี้ — สร้างใหม่ด้วยคำสั่งใน CLAUDE.md
+*.lnk
+
+# อื่น ๆ
+node_modules/
+*.log
+.claude/

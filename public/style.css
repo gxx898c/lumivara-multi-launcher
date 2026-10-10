@@ -1,0 +1,147 @@
+/* สไตล์หน้า web console (ธีมมืด) */
+body {
+  font-family: "Segoe UI", sans-serif;
+  background: #12141c;
+  color: #eee;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 16px;
+  margin: 0;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+h1 { font-size: 24px; margin-bottom: 4px; }
+p.sub { color: #9aa0ac; margin-top: 0; margin-bottom: 20px; font-size: 16px; text-align: center; max-width: 640px; }
+.settings {
+  width: 100%;
+  max-width: 1120px;
+  margin-bottom: 12px;
+  background: #1b1e29;
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-sizing: border-box;
+}
+.settings summary { cursor: pointer; font-size: 16px; color: #c9cdd6; }
+.settings-body { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.settings-body label { font-size: 14px; color: #9aa0ac; margin-top: 6px; }
+.help { font-size: 15px; color: #c9cdd6; }
+.help p { margin: 8px 0; }
+kbd { font: 14px monospace; color: #ffe1a0; background: #0f1117; padding: 1px 5px; border-radius: 4px; }
+input[type=text], select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #333748;
+  background: #0f1117;
+  color: #eee;
+  font-size: 15px;
+}
+.settings-body select { align-self: flex-start; }
+button {
+  padding: 7px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #2a2d3a;
+  color: #eee;
+  cursor: pointer;
+  font-size: 15px;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.1s;
+}
+button:hover { background: #3a3f52; }
+button:active { transform: scale(0.96); }
+button:disabled { opacity: 0.35; cursor: default; transform: none; }
+button.on { background: #2f5d8a; }
+button.on:hover { background: #3a6d9e; }
+.btn-close, #shutdown { background: #6b3232; }
+.btn-close:hover, #shutdown:hover { background: #7d3d3d; }
+.settings-body button { align-self: flex-start; margin-top: 4px; background: #4a5568; }
+#cfgLog { font-size: 14px; color: #7fd08a; min-height: 16px; }
+.rows, #rowList { display: flex; flex-direction: column; gap: 8px; max-width: 1120px; width: 100%; }
+/* หน้าต่างแคบกว่าแถว → เลื่อนแนวนอนในรายการ แทนการตัดขึ้นบรรทัดใหม่ */
+.rows { margin-top: 8px; overflow-x: auto; }
+/* หนึ่งแถว = หนึ่งบรรทัดเสมอ (ไม่ตัดบรรทัด) */
+.row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  background: #1b1e29;
+  padding: 8px;
+  border-radius: 10px;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+.row > * { flex: none; }
+.row button { padding: 6px 8px; }
+/* ปุ่มลากย้ายลำดับแถว */
+.row .handle { padding: 4px 2px; }
+.handle { background: transparent; color: #5c6273; cursor: grab; letter-spacing: -3px; font-size: 16px; }
+.handle:hover, .handle:focus-visible { background: transparent; color: #c9cdd6; }
+.handle:active { cursor: grabbing; transform: none; }
+.row.dragging { opacity: 0.4; outline: 1px dashed #5a6578; }
+.num { flex: none; width: 26px; font-size: 18px; text-align: center; color: #9aa0ac; white-space: nowrap; }
+/* ช่องชื่อยืดเต็มที่ว่างของแถว (ทุกแถวกว้างเท่ากัน ช่องจึงเท่ากัน) แต่ไม่แคบกว่า ~20 ตัวอักษร */
+.row > .title-input { flex: 1 1 20ch; min-width: 20ch; width: 20ch; }
+/* ส่วนข้างช่องชื่อกว้างคงที่ ช่องชื่อทุกแถวจะได้กว้างเท่ากัน (เลขจอ 2 หลัก / Instance10 ไม่ดันช่องให้แคบลง) */
+.folder { flex: none; width: 104px; font-size: 14px; color: #7d8496; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
+.toggle-btn { width: 54px; }
+.ctrls, .extra { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; }
+.extra label { font-size: 14px; color: #9aa0ac; display: flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; }
+.stats { flex: none; width: 170px; font-size: 14px; color: #9aa0ac; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats .warn { color: #ffb86b; }
+.count-btns { display: flex; gap: 8px; }
+.count-btns button { flex: 1; padding: 10px; font-size: 17px; background: transparent; border: 1px dashed #333748; border-radius: 10px; color: #9aa0ac; }
+.count-btns button:hover { background: #1b1e29; color: #eee; }
+.count-btns #removeScreen { flex: 0 0 120px; }
+#totals { font-size: 15px; color: #9aa0ac; margin-top: 12px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; margin-top: 16px; max-width: 1120px; }
+.bar button { padding: 10px 18px; font-size: 16px; background: #4a5568; }
+.bar button:hover { background: #5a6578; }
+.bar label { font-size: 15px; color: #c9cdd6; }
+#log { margin-top: 16px; font-size: 15px; color: #7fd08a; min-height: 18px; text-align: center; }
+
+/* แถบข้าง Automation (ด้านขวา) — เปิดแล้วดันเนื้อหาหลักไปทางซ้าย ไม่บังแถวจอ */
+body.side-open { padding-right: 296px; }
+.side-tab { position: fixed; top: 16px; right: 16px; z-index: 10; background: #2f5d8a; font-size: 15px; padding: 8px 14px; }
+.side-tab:hover { background: #3a6d9e; }
+body.side-open .side-tab { display: none; }
+.sidebar {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 10;
+  width: 280px; box-sizing: border-box; overflow-y: auto;
+  padding: 16px; background: #1b1e29; border-left: 1px solid #2a2d3a;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sidebar[hidden] { display: none; }
+.side-head { display: flex; align-items: center; justify-content: space-between; }
+.sidebar h2 { font-size: 19px; margin: 0; }
+.sidebar h3 { font-size: 15px; color: #9aa0ac; margin: 10px 0 0; font-weight: 600; }
+.side-close { background: transparent; font-size: 22px; padding: 0 8px; }
+.side-note { font-size: 14px; color: #7d8496; margin: 0; }
+.auto-pick { display: flex; gap: 4px; }
+.auto-pick button { flex: 1; padding: 6px 4px; font-size: 14px; }
+#autoScreens { display: flex; flex-direction: column; gap: 2px; max-height: 45vh; overflow-y: auto; }
+#autoScreens label { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; font-size: 15px; cursor: pointer; }
+#autoScreens label:hover { background: #2a2d3a; }
+#autoScreens .dot { width: 8px; height: 8px; border-radius: 50%; background: #4a4f5e; flex: none; }
+#autoScreens .dot.open { background: #4cc28a; }
+#autoScreens .n { color: #7d8496; min-width: 22px; }
+.auto-cmds { display: flex; flex-wrap: wrap; gap: 6px; }
+.auto-cmds button { background: #2f5d8a; font-size: 16px; padding: 10px 18px; }
+.auto-cmds button:hover { background: #3a6d9e; }
+#autoLog { font-size: 14px; color: #7fd08a; min-height: 18px; white-space: pre-line; }
+/* หน้าต่างแคบ: แถบข้างลอยทับแทนการดันเนื้อหา */
+@media (max-width: 900px) { body.side-open { padding-right: 16px; } }
+
+/* เปิดหน้า: ซ่อนไว้จนแถวจอสร้างครบ แล้วค่อยจางเข้า */
+body { transition: opacity 0.15s ease-out; }
+body.loading { opacity: 0; }
+
+/* + เพิ่มจอ: แถวใหม่เลื่อนลงจางเข้า (− ลดจอ: แอนิเมชันหุบแถวอยู่ใน app.js เพราะต้องใช้ความสูงจริงของแถว) */
+@keyframes row-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.row-enter { animation: row-in 0.25s ease-out; }
+/* ปิด "Animation effects" ใน Windows → ไม่มีแอนิเมชันเลย */
+@media (prefers-reduced-motion: reduce) {
+  body, .row-enter { transition: none; animation: none; }
+}

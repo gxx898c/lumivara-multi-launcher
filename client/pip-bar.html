@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #17294e; color: #f7efd9; font: 12px/20px "Segoe UI", sans-serif; }
+  /* ลากแถบนี้เพื่อย้าย PiP — ปุ่มควบคุมอยู่ใน web console (Esc = กลับจอปกติ) */
+  div { height: 100%; padding-left: 4px; -webkit-app-region: drag; user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style></head>
+<body><div id="t"></div>
+<script>document.getElementById('t').textContent = new URLSearchParams(location.search).get('t') + ' · PiP';</script>
+</body></html>

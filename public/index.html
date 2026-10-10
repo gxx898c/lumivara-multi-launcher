@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<!-- หน้า web console ของ Lumivara Multi-Launcher — ข้อมูลทั้งหมดโหลดจาก server ผ่าน app.js -->
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumivara Multi-Launcher</title>
+<meta name="color-scheme" content="dark">
+<!-- พื้นมืดตั้งแต่เฟรมแรก กันจอขาวแวบก่อน style.css โหลด -->
+<style>html, body { background: #12141c; }</style>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="loading">
+  <h1>Lumivara Multi-Launcher</h1>
+  <p class="sub">ตั้งชื่อจอในช่องข้อความ แล้วกด "เปิด" — ชื่อจะเป็น title ของหน้าต่างเกม (แก้ได้ทุกเมื่อ) เมื่อจอเปิดอยู่ ใช้ปุ่มด้านขวาคุมหน้าต่างนั้นได้จากหน้านี้ (ปุ่มสีฟ้า = เปิดใช้งานอยู่)</p>
+
+  <details class="settings">
+    <summary>⚙ ตั้งค่า</summary>
+    <div class="settings-body">
+      <label for="cfgExePath">ตำแหน่งไฟล์ตัวเกม (LumivaraClient.exe ใน runtime — path เต็ม หรือ path เทียบกับโฟลเดอร์ launcher)</label>
+      <input type="text" id="cfgExePath">
+      <label for="cfgInstancesDir">โฟลเดอร์เก็บ Instance profiles (path เต็ม หรือ "." สำหรับโฟลเดอร์เดียวกับ launcher)</label>
+      <input type="text" id="cfgInstancesDir">
+      <button id="saveConfig">บันทึกตำแหน่งไฟล์</button>
+      <div id="cfgLog"></div>
+      <label for="cfgFps">เฟรมเรตเกมตอนซ่อนหน้าต่าง — จำกัดแล้วประหยัด CPU มาก (ไม่จำกัด = วาดเต็มรีเฟรชเรตจอแม้มองไม่เห็น) ถ้าเกมช้าหรือ AFK สะดุด ให้เพิ่มหรือกลับไปไม่จำกัด · มีผลทันที</label>
+      <select id="cfgFps"></select>
+    </div>
+  </details>
+
+  <details class="settings">
+    <summary>⌨ คีย์ลัดในหน้าต่างเกม</summary>
+    <div class="help">
+      <p><kbd>Ctrl+Shift+P</kbd> สลับ PiP / จอปกติ · <kbd>F11</kbd> หรือ <kbd>Alt+Enter</kbd> เต็มหน้าจอ · <kbd>Esc</kbd> ออกจากเต็มจอ / กลับจาก PiP</p>
+      <p><kbd>F5</kbd> รีเฟรชเกม · <kbd>F8</kbd> ซ่อนและปิดเสียงเฉพาะจอนี้</p>
+      <p><kbd>Ctrl+Shift+H</kbd> ซ่อน / เรียกกลับทุกจอ ใช้ได้แม้อยู่ในโปรแกรมอื่น</p>
+      <p>PiP: ลากแถบบนเพื่อย้าย ลากขอบหรือมุมเพื่อย่อ–ขยาย ภาพเกมย่อให้พอดีโดยไม่โหลดใหม่ · เกมเล่นต่อแม้ย่อหรือซ่อนหน้าต่าง</p>
+      <p>เกมแครช / ค้างเกิน 30 วินาที / เน็ตหลุด → จอจะโหลดเกมใหม่เอง (ดูจำนวนครั้งได้ที่ "กู้คืน")</p>
+    </div>
+  </details>
+
+  <div class="rows">
+    <div id="rowList"></div>
+    <div class="count-btns">
+      <button id="addScreen">+ เพิ่มจอ</button>
+      <button id="removeScreen" title="ซ่อนแถวสุดท้าย (ต้องปิดจอนั้นก่อน) — ข้อมูลใน InstanceN ยังอยู่ครบ">− ลดจอ</button>
+    </div>
+  </div>
+  <div id="totals"></div>
+
+  <div class="bar">
+    <label><input type="checkbox" id="startPip"> เปิดเป็น PiP</label>
+    <button id="openAll">เปิดทั้งหมดที่ยังไม่เปิด</button>
+    <select id="displaySelect" title="จอภาพที่จะจัดเรียง" hidden></select>
+    <button id="tileAll" title="จัดทุกจอที่แสดงอยู่ให้เต็มจอภาพแบบตาราง (ออกจาก PiP/เต็มจอให้อัตโนมัติ)">จัดเรียงทุกจอให้พอดีหน้าจอ</button>
+    <button id="toggleAll" title="Ctrl+Shift+H">ซ่อน / เรียกกลับทุกจอ</button>
+    <button id="muteAll">ปิด / เปิดเสียงทุกจอ</button>
+    <button id="quitAll">ปิดทุกจอ</button>
+    <button id="shutdown">ปิดโปรแกรมนี้ (launcher)</button>
+  </div>
+  <div id="log"></div>
+
+  <!-- แถบข้าง Automation: เลือกจอ แล้วสั่งคำสั่ง (เช่น กดปุ่ม) กับทุกจอที่เลือกพร้อมกัน -->
+  <button id="autoToggle" class="side-tab" title="เปิดแถบ Automation">🤖 Automation</button>
+  <aside id="automation" class="sidebar" hidden aria-label="Automation">
+    <div class="side-head">
+      <h2>🤖 Automation</h2>
+      <button id="autoClose" class="side-close" title="ปิดแถบ" aria-label="ปิดแถบ Automation">×</button>
+    </div>
+    <h3>เลือกจอ</h3>
+    <div class="auto-pick">
+      <button id="autoAll">ทั้งหมด</button>
+      <button id="autoOpen">เฉพาะที่เปิด</button>
+      <button id="autoNone">ไม่เลือก</button>
+    </div>
+    <div id="autoScreens"></div>
+    <h3>คำสั่ง</h3>
+    <p class="side-note">ส่งให้เฉพาะจอที่เลือกและเปิดอยู่ (จอที่ซ่อนอยู่ก็ใช้ได้)</p>
+    <div class="auto-cmds">
+      <button class="auto-key" data-key="I" title="กดปุ่ม I ในเกม 1 ครั้ง">กด I</button>
+    </div>
+    <div id="autoLog"></div>
+  </aside>
+
+  <!-- แถวของหนึ่งจอ — app.js คัดลอกตามจำนวนจอ -->
+  <template id="rowTpl">
+    <div class="row">
+      <button class="handle" title="ลากเพื่อย้ายลำดับ (หรือคลิกแล้วกด ↑ / ↓) — ข้อมูลจอไม่เปลี่ยน" aria-label="ย้ายลำดับจอ">⋮⋮</button>
+      <span class="num"></span>
+      <input type="text" class="title-input" maxlength="60" title="ชื่อหน้าต่าง — แก้ได้ทุกเมื่อ แม้จอเปิดอยู่ (โฟลเดอร์ข้อมูลไม่เปลี่ยน)">
+      <span class="folder"></span>
+      <button class="toggle-btn" data-state="closed">เปิด</button>
+      <span class="ctrls">
+        <button data-act="focus" title="เรียกหน้าต่างขึ้นมาด้านหน้า">เรียก</button>
+        <button data-act="pip" title="สลับ PiP / จอปกติ (Ctrl+Shift+P)">PiP</button>
+        <button data-act="fullscreen" title="สลับเต็มหน้าจอ (F11)">เต็มจอ</button>
+        <button data-act="toggleHide" title="ซ่อนและปิดเสียง / เรียกกลับ (F8)">ซ่อน</button>
+        <button data-act="mute" title="ปิด/เปิดเสียงจอนี้">เสียง</button>
+        <button data-act="refresh" title="รีเฟรชหน้าเกม ไม่ล้างข้อมูลเข้าสู่ระบบ (F5)">รีเฟรช</button>
+      </span>
+      <span class="extra">
+        <label title="เปิดจอนี้ให้เองเมื่อเปิด launcher"><input type="checkbox" class="auto-cb"> อัตโนมัติ</label>
+        <button class="backup-btn" title="คัดลอกข้อมูลจอนี้ไปโฟลเดอร์ backups (ต้องปิดจอก่อน)">สำรอง</button>
+        <span class="stats"></span>
+      </span>
+    </div>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
