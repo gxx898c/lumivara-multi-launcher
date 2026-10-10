@@ -28,7 +28,16 @@
 2. ดับเบิลคลิก **`Lumivara Launcher`** (shortcut ไอคอนเกม) → หน้าเว็บเปิดขึ้นมาเอง
 3. พิมพ์ชื่อจอ กด **เปิด** แล้วล็อกอินเกมในหน้าต่างที่เปิดขึ้น
 
-ติดตั้งใหม่ในเครื่องอื่นตั้งแต่ศูนย์: ดูขั้นตอนใน [CLAUDE.md](CLAUDE.md) (ส่งไฟล์นั้นให้ Claude Code สร้างโปรเจกต์ให้ได้เลย)
+### ติดตั้งจาก GitHub (เครื่องใหม่)
+1. ดาวน์โหลดโค้ด: `git clone https://github.com/gxx898c/lumivara-multi-launcher.git` (หรือกด Code → Download ZIP)
+2. ดาวน์โหลด **`lumivara-runtime-win-x64.zip`** จากหน้า [Releases](https://github.com/gxx898c/lumivara-multi-launcher/releases) แล้วแตกไฟล์ไว้ในโฟลเดอร์โปรเจกต์ — จะได้โฟลเดอร์ `runtime\` อยู่ข้าง `server.js` (มี `runtime\LumivaraClient.exe`)
+3. สร้าง shortcut `Lumivara Launcher` ด้วย PowerShell ในโฟลเดอร์โปรเจกต์ (หรือใช้ `start.bat` แทนก็ได้):
+   ```powershell
+   $p=(Get-Location).Path; $l=(New-Object -ComObject WScript.Shell).CreateShortcut("$p\Lumivara Launcher.lnk"); $l.TargetPath='C:\Windows\System32\conhost.exe'; $l.Arguments='--headless node server.js'; $l.WorkingDirectory=$p; $l.IconLocation="$p\client\game.ico,0"; $l.Save()
+   ```
+4. เปิด launcher แล้วใช้งานตามด้านบน (`config.json` และโฟลเดอร์ข้อมูลจอจะถูกสร้างให้เองตอนใช้งาน)
+
+`runtime\` คือ Electron 44.5.1 จาก Lumivara Online Windows Client 4.4.5 (ตัด `app.asar` ของเกมทางการออก) ไม่ได้อยู่ใน git เพราะไฟล์ใหญ่เกินที่ GitHub รับ · ไลเซนส์: `runtime\LICENSE` (Electron, MIT) และ `runtime\LICENSES.chromium.html` (Chromium) · สร้าง `runtime\` เองจากตัวเกมทางการได้ตาม [CLAUDE.md](CLAUDE.md) หัวข้อ "Building from scratch" (ส่งไฟล์นั้นให้ Claude Code สร้างโปรเจกต์ให้ได้เลย)
 
 ## โครงสร้าง
 - `server.js` — ตัว launcher + API ของ web console ที่ `http://localhost:4321` (Node.js ไม่มี dependency)

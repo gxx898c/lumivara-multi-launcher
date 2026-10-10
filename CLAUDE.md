@@ -137,13 +137,21 @@ An IIFE guarded by `window.__lumivaraBackgroundShim`.
 ### Security (keep this when adding endpoints)
 Both servers return 403 unless the `Host` header matches `127.0.0.1:<port>` or `localhost:<port>`, which blocks DNS rebinding. Every request on the console except the three static files also needs the header `X-Lumivara: 1`. That custom header forces a CORS preflight, which is never answered, so other websites can't send commands. The page's `fetch` calls send this header.
 
+## Repository and releases
+
+The code is on GitHub at `gxx898c/lumivara-multi-launcher` (public, branch `main`). `.gitignore` keeps out `saved/`, `Instance*/`, `backups/` (player data, never commit), `runtime/` (too big: the exe is 235 MB, over GitHub's 100 MB limit), `config.json` (per machine) and `*.lnk` (contains a local path).
+
+`runtime/` is published separately as the release asset `lumivara-runtime-win-x64.zip`, which unzips to a `runtime/` folder. To rebuild it, zip with Windows' own tar (`C:\Windows\System32\tar.exe -a -c -f <zip> -C <project> runtime`); Git Bash's tar treats `C:` as a remote host. It must keep `runtime/LICENSE` (Electron, MIT) and `runtime/LICENSES.chromium.html`. The latter comes from Electron's official `electron-v44.5.1-win32-x64.zip`, because the official game download's copy had been deleted. Commits use the repo-local git name `gxx898c`, and the active `gh` account must be `gxx898c` to push (`pongsathorn-t` has no access).
+
 ## Building from scratch
+
+Users who only want to run it: clone the repo and unzip the release asset into the project folder (see README). The steps below rebuild everything from the official client instead.
 
 1. Download and unzip the official **Lumivara Online Windows x64** client (version 4.4.5 was used; the folder is called `Lumivara-Online-Windows-x64`).
 2. Copy that whole folder to `<project>\runtime`, then in the copy:
    - Delete `resources\app.asar`.
    - Rename `Lumivara Online.exe` to `LumivaraClient.exe`.
-   - Optionally delete `LICENSES.chromium.html`, `Lumivara Online.ico`, `version`, `อ่านก่อนใช้.txt`, `Start-*.cmd`, and every file in `locales\` except `en-US.pak` and `th.pak`.
+   - Optionally delete `Lumivara Online.ico`, `version`, `อ่านก่อนใช้.txt`, `Start-*.cmd`, and every file in `locales\` except `en-US.pak` and `th.pak`. Keep `LICENSE` and `LICENSES.chromium.html`; they are required if `runtime/` is ever redistributed.
    - Create `resources\app\package.json`: `{ "name": "lumivara-multi-client", "main": "../../../client/main.cjs" }`
 3. Copy `Lumivara Online.ico` from the download to `client\game.ico`.
 4. Write `client/visibility-spoof.js`, `client/pip-bar.html`, `client/main.cjs`, `server.js`, `public/index.html`, `public/style.css`, `public/app.js`, `config.json`, `package.json` and `start.bat` following the spec above. Each file starts with a short Thai comment explaining its purpose. Create `Lumivara Launcher.lnk` with PowerShell: `$l=(New-Object -ComObject WScript.Shell).CreateShortcut('<project>\Lumivara Launcher.lnk'); $l.TargetPath='C:\Windows\System32\conhost.exe'; $l.Arguments='--headless node server.js'; $l.WorkingDirectory='<project>'; $l.IconLocation='<project>\client\game.ico,0'; $l.Save()`
