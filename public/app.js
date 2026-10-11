@@ -89,6 +89,7 @@ function fillSettings(cfg) {
 
 // --- สถานะ ---
 const openNow = new Set(); // เลขจอ (string) ที่เปิดอยู่ จาก /status ล่าสุด
+let clientVersion = 1; // เวอร์ชันโค้ดหน้าต่างเกมที่ launcher ต้องการ (จาก /config)
 
 // st = สถานะจาก /status (null = จอปิดอยู่)
 function setRowState(n, st) {
@@ -110,24 +111,74 @@ function setRowState(n, st) {
   row.querySelector('[data-act="toggleHide"]').textContent = st && st.hidden ? 'แสดง' : 'ซ่อน';
   row.querySelector('[data-act="mute"]').textContent = st && st.muted ? 'เปิดเสียง' : 'ปิดเสียง';
   row.querySelector('.backup-btn').disabled = !!st;
+  // เวอร์ชันโค้ดหน้าต่างเกมของจอนี้ (ขวาของชื่อจอ) — สีส้มถ้าเก่ากว่าที่ launcher ต้องการ
+  const ver = row.querySelector('.ver');
+  ver.textContent = st ? 'v' + (st.ver || 1) : '';
+  ver.classList.toggle('old', !!st && (st.ver || 1) < clientVersion);
+  ver.title = st ? 'โค้ดหน้าต่างเกม v' + (st.ver || 1) + ' (launcher ต้องการ v' + clientVersion + ')' : 'เวอร์ชันโค้ดหน้าต่างเกมของจอนี้ (แสดงเมื่อจอเปิดอยู่)';
   const stats = row.querySelector('.stats');
-  if (!st) { stats.textContent = ''; stats.title = ''; return; }
-  stats.innerHTML = st.mem + ' MB · CPU ' + st.cpu + '%'
-    + (st.recovering ? ' · <span class="warn">กำลังกู้คืน…</span>' : st.recoveries ? ' · <span class="warn">กู้คืน ' + st.recoveries + '</span>' : '');
-  stats.title = stats.textContent; // ข้อความยาวเกินช่องจะถูกตัดด้วย … — ชี้เมาส์ดูเต็ม
+  // ส่วนป้าย (badge) กับตัวเลข (nums) แยกกัน — ตัวเลขเปลี่ยนทุก 2 วินาที แต่ป้ายสร้างใหม่เฉพาะตอนสถานะเปลี่ยน
+  // (เดิมสร้างปุ่มใหม่ทุกรอบ ถ้ารอบอัปเดตมาตรงกลางการคลิก ปุ่มเดิมหายไปและการคลิกหายเงียบ)
+  if (!stats.firstChild) stats.innerHTML = '<span class="badge"></span><span class="nums"></span>';
+  const badge = stats.querySelector('.badge'), nums = stats.querySelector('.nums');
+  // จอที่เปิดไว้ก่อนอัปเดตยังรันโค้ดเก่า — คำสั่งใหม่ (เช่น AFK) ใช้ไม่ได้จนกว่าจะปิด-เปิดใหม่
+  // กดป้ายนี้ = ปิดแล้วเปิดจอใหม่ให้อัตโนมัติ (launcher ทำทั้งลำดับ)
+  const mode = !st ? '' : restarting.has(n) ? 'restarting' : (st.ver || 1) < clientVersion ? 'outdated' : '';
+  if (badge.dataset.mode !== mode) {
+    badge.dataset.mode = mode;
+    badge.innerHTML = mode === 'restarting' ? '<span class="warn">⟳ กำลังปิด-เปิดใหม่…</span> · '
+      : mode === 'outdated' ? '<button class="update-btn" title="จอนี้เปิดไว้ก่อนอัปเดต ยังใช้โค้ดหน้าต่างเกมรุ่นเก่า — คลิกเพื่อปิดแล้วเปิดใหม่ให้อัตโนมัติ (ข้อมูลล็อกอินไม่หาย)">⟳ ปิด-เปิดใหม่</button> · '
+      : '';
+  }
+  if (!st) { nums.textContent = ''; stats.title = ''; botAlerts.delete(n); lastBot[n] = null; return; }
+  // สถานะบอท (Auto Play) จาก #bot-status ในเกม: ▶ ทำงาน · ■ หยุด (แดง = เพิ่งหยุดจากที่เคยทำงาน → แจ้งเตือน) · 🌙 หน้าประหยัดพลังงาน
+  const bot = st.bot;
+  if (lastBot[n] === 'running' && bot === 'stopped') {
+    botAlerts.add(n);
+    log('⚠ บอทจอ "' + nameOf(n) + '" หยุดทำงาน (' + new Date().toLocaleTimeString('th-TH') + ')');
+  }
+  if (bot === 'running') botAlerts.delete(n);
+  if (bot) lastBot[n] = bot;
+  const botHtml = bot === 'running' ? '<span class="bot on" title="Auto Play ทำงานอยู่">▶</span> '
+    : bot === 'stopped' ? '<span class="bot ' + (botAlerts.has(n) ? 'alert' : 'off') + '" title="Auto Play หยุดอยู่' + (botAlerts.has(n) ? ' — เพิ่งหยุดจากที่เคยทำงาน' : '') + '">■</span> ' : '';
+  const afk = st.autoAfkLast;
+  nums.innerHTML = botHtml + (st.saver ? '<span title="อยู่หน้าประหยัดพลังงาน (Battery saver)">🌙</span> ' : '')
+    + st.mem + ' MB · CPU ' + st.cpu + '%'
+    + (st.recovering ? ' · <span class="warn">กำลังกู้คืน…</span>' : st.recoveries ? ' · <span class="warn">กู้คืน ' + st.recoveries + '</span>' : '')
+    + (afk && !afk.ok ? ' · <span class="warn" title="AFK อัตโนมัติไม่สำเร็จ: ' + afk.msg.replace(/"/g, '') + '">AFK✗</span>' : '');
+  stats.title = (bot ? 'Auto Play: ' + (bot === 'running' ? 'ทำงาน' : 'หยุด') + ' · ' : '') + (st.saver ? 'หน้าประหยัดพลังงาน · ' : '') + stats.textContent.replace(/^[▶■🌙\s]+/u, '')
+    + (afk ? '\nAFK อัตโนมัติล่าสุด ' + new Date(afk.at).toLocaleTimeString('th-TH') + ': ' + afk.msg : '');
+}
+
+// แจ้งเตือนบอทหยุด: จอที่ Auto Play เพิ่งเปลี่ยนจากทำงาน → หยุด (หายเมื่อกลับมาทำงานหรือปิดจอ) · แสดงจำนวนในชื่อแท็บเบราว์เซอร์ด้วย
+const lastBot = {}, botAlerts = new Set();
+const BASE_TITLE = document.title;
+function updateAlertTitle() {
+  document.title = (botAlerts.size ? '(🔴 ' + botAlerts.size + ' บอทหยุด) ' : '') + BASE_TITLE;
 }
 
 function refreshStatus() {
   get('/status')
     .then((data) => {
-      let open = 0, mem = 0, cpu = 0;
+      let open = 0, mem = 0, cpu = 0, running = 0;
+      outdatedNow = [];
       Object.keys(data).forEach((n) => {
         setRowState(n, data[n]);
-        if (data[n]) { open++; mem += data[n].mem; cpu += data[n].cpu; }
+        if (data[n]) {
+          open++; mem += data[n].mem; cpu += data[n].cpu;
+          if (data[n].bot === 'running') running++;
+          if ((data[n].ver || 1) < clientVersion) outdatedNow.push(n);
+        }
       });
       $('totals').textContent = open
-        ? 'เปิดอยู่ ' + open + ' จอ · RAM รวม ' + (mem / 1024).toFixed(1) + ' GB · CPU รวม ' + cpu.toFixed(1) + '%'
+        ? 'เปิดอยู่ ' + open + ' จอ · บอททำงาน ' + running + ' จอ' + (botAlerts.size ? ' · ⚠ บอทหยุด ' + botAlerts.size + ' จอ' : '')
+          + ' · RAM รวม ' + (mem / 1024).toFixed(1) + ' GB · CPU รวม ' + cpu.toFixed(1) + '%'
         : '';
+      updateAlertTitle();
+      // ปุ่ม "อัปเดตจอที่เก่า (N)" แสดงเมื่อมีจอใช้โค้ดหน้าต่างเกมรุ่นเก่า
+      const ub = $('updateAll');
+      ub.hidden = !outdatedNow.length && !updatingAll;
+      if (!updatingAll) ub.textContent = '⟳ อัปเดตจอที่เก่า (' + outdatedNow.length + ')';
       if (open && !displaySelect.options.length) loadDisplays();
     })
     .catch(() => {});
@@ -179,6 +230,47 @@ function instanceAction(n, act) {
     .catch(fail);
 }
 
+// ปิด-เปิดจอใหม่เพื่อใช้โค้ดหน้าต่างเกมล่าสุด (กดจากป้าย "⟳ ปิด-เปิดใหม่")
+const restarting = new Set();
+let outdatedNow = [], updatingAll = false;
+
+// "⟳ อัปเดตจอที่เก่า (N)": ปิด-เปิดใหม่ทุกจอที่ใช้โค้ดเก่า ทีละจอตามลำดับแถว (ไม่ให้เครื่องอืดจากเปิดพร้อมกัน)
+async function restartOutdated() {
+  const order = Array.from(rowList.children, (r) => r.dataset.n);
+  const todo = order.filter((n) => outdatedNow.includes(n));
+  if (!todo.length || updatingAll) return;
+  if (!confirm('ปิดแล้วเปิดใหม่ ' + todo.length + ' จอที่ใช้โค้ดเก่า ทีละจอ?\n' + todo.map(nameOf).join(', ') + '\nเกมในจอเหล่านี้จะโหลดใหม่ (ข้อมูลล็อกอินไม่หาย)')) return;
+  updatingAll = true;
+  const ub = $('updateAll');
+  ub.disabled = true;
+  const failed = [];
+  for (const [i, n] of todo.entries()) {
+    ub.textContent = '⟳ กำลังอัปเดต ' + (i + 1) + '/' + todo.length + ' …';
+    restarting.add(n);
+    refreshStatus();
+    try {
+      const data = await post('/restart/' + n);
+      if (!data.ok) failed.push(nameOf(n) + ' (' + data.error + ')');
+    } catch (err) { failed.push(nameOf(n) + ' (' + err + ')'); }
+    restarting.delete(n);
+  }
+  updatingAll = false;
+  ub.disabled = false;
+  log(failed.length ? 'อัปเดตแล้ว ' + (todo.length - failed.length) + '/' + todo.length + ' จอ · ไม่สำเร็จ: ' + failed.join(', ') : 'อัปเดตครบ ' + todo.length + ' จอแล้ว');
+  setTimeout(refreshStatus, 1500);
+}
+function restartScreen(n) {
+  if (restarting.has(n)) return;
+  if (!confirm('ปิดแล้วเปิดจอ "' + nameOf(n) + '" ใหม่ เพื่อใช้โค้ดล่าสุด?\nเกมในจอนี้จะโหลดใหม่ (ข้อมูลล็อกอินไม่หาย)')) return;
+  restarting.add(n);
+  log('กำลังปิด-เปิดจอ "' + nameOf(n) + '" ใหม่…');
+  refreshStatus();
+  post('/restart/' + n)
+    .then((data) => log(data.ok ? 'เปิดจอ "' + nameOf(n) + '" ใหม่แล้ว' : 'ปิด-เปิดจอ "' + nameOf(n) + '" ใหม่ไม่สำเร็จ: ' + data.error))
+    .catch(fail)
+    .finally(() => { restarting.delete(n); setTimeout(refreshStatus, 1500); });
+}
+
 function backup(n, btn) {
   btn.disabled = true;
   log('กำลังสำรองข้อมูลจอที่ ' + n + '…');
@@ -197,6 +289,8 @@ rowList.addEventListener('click', (e) => {
     else openInstance(n);
   } else if (btn.classList.contains('backup-btn')) {
     backup(n, btn);
+  } else if (btn.classList.contains('update-btn')) {
+    restartScreen(n);
   } else if (btn.dataset.act) {
     instanceAction(n, btn.dataset.act);
   }
@@ -295,10 +389,21 @@ function renderAutoList() {
     num.textContent = n;
     const name = document.createElement('span');
     name.textContent = nameOf(n);
-    label.append(cb, dot, num, name);
+    // สวิตช์ "AFK อัตโนมัติ" ของจอนี้ (ทางขวา): เกมโหลดใหม่เมื่อไร (เปิด/รีเฟรช/กู้คืน) launcher สั่ง AFK ให้เอง
+    const auto = document.createElement('input');
+    auto.type = 'checkbox';
+    auto.className = 'auto-afk-cb';
+    auto.checked = autoAfkSet.has(n);
+    auto.title = 'AFK อัตโนมัติ: ทุกครั้งที่เกมจอนี้โหลดใหม่ (เปิด / ปิด-เปิดใหม่ / รีเฟรช / กู้คืนหลังแครชหรือเน็ตหลุด) จะเข้าหน้าประหยัดพลังงานให้เอง';
+    const autoTag = document.createElement('span');
+    autoTag.className = 'auto-afk-tag';
+    autoTag.textContent = '🔁';
+    autoTag.title = auto.title;
+    label.append(cb, dot, num, name, autoTag, auto);
     box.appendChild(label);
   }
 }
+const autoAfkSet = new Set(); // จอที่เปิด AFK อัตโนมัติไว้ (จาก config.json ฝั่ง server)
 
 function setAutoSel(list) {
   autoSel.clear();
@@ -309,6 +414,15 @@ function setAutoSel(list) {
 
 $('autoScreens').addEventListener('change', (e) => {
   const n = e.target.closest('label').dataset.n;
+  if (e.target.classList.contains('auto-afk-cb')) {
+    const on = e.target.checked;
+    post('/autoafk/' + n, { on }).then((data) => {
+      if (!data.ok) { e.target.checked = !on; return log(data.error); }
+      if (on) autoAfkSet.add(n); else autoAfkSet.delete(n);
+      $('autoLog').textContent = on ? '🔁 AFK อัตโนมัติจอ "' + nameOf(n) + '" เปิดแล้ว — มีผลตั้งแต่เกมโหลดใหม่ครั้งถัดไป' : 'ปิด AFK อัตโนมัติจอ "' + nameOf(n) + '"';
+    }).catch(fail);
+    return;
+  }
   if (e.target.checked) autoSel.add(n); else autoSel.delete(n);
   saveAutoSel();
 });
@@ -316,26 +430,31 @@ $('autoAll').addEventListener('click', () => setAutoSel(Array.from(rowList.child
 $('autoOpen').addEventListener('click', () => setAutoSel([...openNow]));
 $('autoNone').addEventListener('click', () => setAutoSel([]));
 
-// กดปุ่ม key ในทุกจอที่เลือก (พร้อมกัน) แล้วสรุปผล
-async function runKey(key, btn) {
+// สั่งคำสั่ง automation กับทุกจอที่เลือกและเปิดอยู่ (พร้อมกัน) แล้วสรุปผล
+// label = ชื่อคำสั่งในสรุป · request(n) = Promise ของผลจาก server ({ok, error, ...})
+async function runAuto(label, btn, request) {
   const autoLog = $('autoLog');
   const targets = Array.from(rowList.children, (r) => r.dataset.n).filter((n) => autoSel.has(n));
   if (!targets.length) { autoLog.textContent = 'ยังไม่ได้เลือกจอ'; return; }
-  btn.disabled = true;
+  const buttons = document.querySelectorAll('.auto-cmds button');
+  buttons.forEach((b) => { b.disabled = true; });
+  autoLog.textContent = 'กำลังทำ "' + label + '" …';
   const results = await Promise.all(targets.map((n) => (openNow.has(n)
-    ? post('/key/' + n, { key }).then((d) => [n, d.ok ? 'ok' : d.error], (err) => [n, String(err)])
+    ? request(n).then((d) => [n, d.ok ? 'ok' : d.error, d], (err) => [n, String(err)])
     : Promise.resolve([n, 'closed']))));
-  btn.disabled = false;
-  const names = (want) => results.filter(([, r]) => (want === 'fail' ? r !== 'ok' && r !== 'closed' : r === want));
-  const time = new Date().toLocaleTimeString('th-TH');
+  buttons.forEach((b) => { b.disabled = false; });
+  const pick = (want) => results.filter(([, r]) => (want === 'fail' ? r !== 'ok' && r !== 'closed' : r === want));
   const lines = [];
-  const ok = names('ok'), closed = names('closed'), failed = names('fail');
-  if (ok.length) lines.push('✓ กด ' + key + ' แล้ว: ' + ok.map(([n]) => nameOf(n)).join(', '));
+  const ok = pick('ok'), closed = pick('closed'), failed = pick('fail');
+  if (ok.length) lines.push('✓ ' + label + ' แล้ว: ' + ok.map(([n]) => nameOf(n)).join(', '));
   if (closed.length) lines.push('– ข้าม (ปิดอยู่): ' + closed.map(([n]) => nameOf(n)).join(', '));
   if (failed.length) lines.push('✗ ไม่สำเร็จ: ' + failed.map(([n, r]) => nameOf(n) + ' (' + r + ')').join(', '));
-  autoLog.textContent = '[' + time + ']\n' + lines.join('\n');
+  autoLog.textContent = '[' + new Date().toLocaleTimeString('th-TH') + ']\n' + lines.join('\n');
 }
-document.querySelectorAll('.auto-key').forEach((b) => b.addEventListener('click', () => runKey(b.dataset.key, b)));
+document.querySelectorAll('.auto-key').forEach((b) => b.addEventListener('click',
+  () => runAuto('กด ' + b.dataset.key, b, (n) => post('/key/' + n, { key: b.dataset.key }))));
+// AFK: กด B → OCR หา "Battery saver screen" → คลิก (ทำที่ server — ใช้เวลาหลายวินาทีต่อจอ)
+$('autoAfk').addEventListener('click', (e) => runAuto('AFK', e.currentTarget, (n) => post('/afk/' + n)));
 
 // เปิด/ปิดแถบข้าง (จำไว้ในเบราว์เซอร์)
 function setSidebar(open) {
@@ -354,6 +473,8 @@ displaySelect.addEventListener('change', () => lsSet('lumivaraDisplay', displayS
 
 $('addScreen').addEventListener('click', () => changeCount('/add-screen'));
 $('removeScreen').addEventListener('click', () => changeCount('/remove-screen'));
+
+$('updateAll').addEventListener('click', restartOutdated);
 
 $('openAll').addEventListener('click', () => {
   const closed = Array.from(rowList.querySelectorAll('.toggle-btn')).filter((b) => b.dataset.state !== 'open');
@@ -398,6 +519,10 @@ $('cfgFps').addEventListener('change', (e) => {
 // --- เริ่มทำงาน ---
 get('/config')
   .then((cfg) => {
+    clientVersion = cfg.clientVersion || 1;
+    (cfg.autoAfk || []).forEach((n) => autoAfkSet.add(String(n)));
+    const lv = cfg.launcher || {};
+    $('appVersion').textContent = 'Launcher v' + (lv.version || '?') + (lv.build ? ' · build ' + lv.build : '') + ' · client v' + clientVersion;
     fillSettings(cfg);
     for (const n of cfg.order) addRow(n, cfg);
     renderAutoList();

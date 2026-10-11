@@ -12,6 +12,9 @@ config.json
 # shortcut มี path เต็มของเครื่องนี้ — สร้างใหม่ด้วยคำสั่งใน CLAUDE.md
 *.lnk
 
+# ภาพหน้าเกม/ผล OCR ที่บันทึกไว้ตอน automation หาข้อความไม่เจอ
+ocr-debug/
+
 # อื่น ๆ
 node_modules/
 *.log

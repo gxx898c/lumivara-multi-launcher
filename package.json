@@ -1,6 +1,6 @@
 {
   "name": "lumivara-multi-launcher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "เปิดหลายอินสแตนซ์ของ Lumivara.exe พร้อมกัน แยก user-data-dir ต่อจอ",
   "main": "server.js",
   "scripts": {

@@ -6,7 +6,7 @@
 // ไม่มีแถบปุ่มในหน้าต่าง — สั่งงานทั้งหมดจาก web console (server.js) ผ่าน HTTP 127.0.0.1:<lv-control-port>
 'use strict';
 const path = require('node:path'), fs = require('node:fs'), http = require('node:http');
-const { app, BaseWindow, WebContentsView, screen, globalShortcut, powerSaveBlocker, dialog, session } = require('electron');
+const { app, BaseWindow, WebContentsView, screen, globalShortcut, powerSaveBlocker, dialog, session, nativeImage } = require('electron');
 
 const arg = (name) => { const a = process.argv.find((x) => x.startsWith(`--lv-${name}=`)); return a ? a.slice(name.length + 6) : ''; };
 const instance = arg('instance') || '1';
@@ -16,6 +16,13 @@ const cleanTitle = (t) => (typeof t === 'string' ? t.replace(/[\x00-\x1f\x7f]/g,
 let title = cleanTitle(arg('title')) || `Lumivara #${instance}`;
 const FPS_CHOICES = [0, 20, 10, 5]; // 0 = ไม่จำกัด (เหมือนเดิม)
 let hiddenFps = FPS_CHOICES.includes(Number(arg('hidden-fps'))) ? Number(arg('hidden-fps')) : 0;
+// เวอร์ชันโค้ดหน้าต่างเกม — เพิ่มทุกครั้งที่เพิ่ม/เปลี่ยนคำสั่ง ให้ตรงกับ CLIENT_VERSION ใน server.js
+// launcher ใช้เทียบว่าจอที่เปิดอยู่ต้องปิด-เปิดใหม่เพื่อใช้โค้ดใหม่หรือไม่
+const CLIENT_VERSION = 7;
+// ชื่อบนแถบหน้าต่าง/taskbar = ชื่อจอ + เวอร์ชัน (launcher ที่เปิดหน้าต่างนี้ ส่งมาทาง --lv-launcher-version) ไว้เทียบเวลามีปัญหา
+// เช่น "Main — Launcher v1.1.0 · build a7de5d4 · client v5" · แถบ PiP ใช้แค่ชื่อจอ (พื้นที่เล็ก)
+const launcherVersion = arg('launcher-version').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 80);
+const windowTitle = () => `${title} — ${launcherVersion ? 'Launcher ' + launcherVersion + ' · ' : ''}client v${CLIENT_VERSION}`;
 const gameUrl = 'https://lumivaraonline.com/';
 const gameIcon = path.join(__dirname, 'game.ico');
 const REF_W = 1100, REF_H = 750, PIP_BAR = 24;
@@ -29,6 +36,14 @@ for (const flag of ['disable-background-timer-throttling', 'disable-renderer-bac
 let normalWindow, pipWindow, gameView, pipBar, lastPiPBounds;
 let moving = false, hidden = false, userMuted = false, quitting = false, hiddenWindows = [];
 let recoveries = 0, recovering = false, retryTimer, lastPong = Date.now();
+// สถานะในเกม (อ่านทุก 5 วิ พร้อมตัวตรวจเกมค้าง): loads = จำนวนครั้งที่หน้าเกมโหลดเสร็จ (เพิ่มเมื่อเปิด/รีเฟรช/กู้คืน)
+// bot = ข้อความ #bot-status ("Running"/"Stopped") · saver = อยู่หน้าประหยัดพลังงาน (#battery-saver แสดงอยู่)
+let loads = 0, botText = null, inSaver = false;
+// หมายเหตุ: ห้ามใช้ offsetParent ตรวจว่าแสดงอยู่ — องค์ประกอบ position:fixed (เช่น #battery-saver ที่คลุมทั้งจอ) มี offsetParent เป็น null เสมอ
+const GAME_PROBE = `(() => { const s = document.getElementById('bot-status'), b = document.getElementById('battery-saver');
+  const shown = (e) => { if (!e) return false; const r = e.getBoundingClientRect(), c = getComputedStyle(e);
+    return r.width > 0 && r.height > 0 && c.display !== 'none' && c.visibility !== 'hidden' && c.opacity !== '0'; };
+  return [s ? s.textContent.trim() : null, shown(b)]; })()`;
 const popups = new Set();
 const allWindows = () => [normalWindow, pipWindow, ...popups].filter((w) => w && !w.isDestroyed());
 const allContents = () => [gameView?.webContents, pipBar?.webContents, ...Array.from(popups, (w) => w.webContents)].filter((c) => c && !c.isDestroyed());
@@ -42,7 +57,8 @@ function metrics() {
 
 function state() {
   return {
-    title, hidden, muted: userMuted, pip: !!pipWindow, recoveries, recovering,
+    ver: CLIENT_VERSION, title, hidden, muted: userMuted, pip: !!pipWindow, recoveries, recovering,
+    loads, bot: botText ? botText.toLowerCase() : null, saver: inSaver,
     fullscreen: !!normalWindow && !normalWindow.isDestroyed() && normalWindow.isFullScreen(),
     ...metrics(),
   };
@@ -133,7 +149,7 @@ function setTitle(params) {
   const t = cleanTitle(params.get('t'));
   if (!t) throw new Error('invalid title');
   title = t;
-  for (const w of [normalWindow, pipWindow]) if (w && !w.isDestroyed()) w.setTitle(title);
+  for (const w of [normalWindow, pipWindow]) if (w && !w.isDestroyed()) w.setTitle(windowTitle());
   if (pipBar) pipBar.webContents.executeJavaScript(`document.getElementById('t').textContent=${JSON.stringify(title + ' · PiP')}`).catch(() => {});
 }
 
@@ -159,7 +175,7 @@ async function enterPiP() {
     const height = Math.min(lastPiPBounds?.height || 260, area.height);
     const remembered = onScreen(lastPiPBounds);
     pipWindow = new BaseWindow({
-      icon: gameIcon, title,
+      icon: gameIcon, title: windowTitle(),
       x: remembered ? lastPiPBounds.x : area.x + area.width - width - 16,
       y: remembered ? lastPiPBounds.y : area.y + area.height - height - 16,
       width, height, minWidth: 64, minHeight: 48,
@@ -302,7 +318,7 @@ function watchHealth(wc) {
       wc.forcefullyCrashRenderer(); // → render-process-gone → recover()
       return;
     }
-    wc.executeJavaScript('1').then(() => { lastPong = Date.now(); }, () => {});
+    wc.executeJavaScript(GAME_PROBE).then(([bot, saver]) => { lastPong = Date.now(); botText = bot; inSaver = saver; }, () => {});
   }, 5000);
 }
 
@@ -326,6 +342,69 @@ async function pressKey(params) {
   const base = { key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk };
   await wc.debugger.sendCommand('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', text, ...base });
   await wc.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+}
+
+// จับภาพเฉพาะหน้าเกม (WebContentsView ของเกม ไม่รวมกรอบหน้าต่าง/แถบ PiP) สำหรับ OCR
+// ขยาย 2 เท่าให้ Tesseract อ่านตัวหนังสือเล็กในเกมได้ดีขึ้น · scale = พิกเซลภาพ ต่อ 1 CSS px ของหน้าเกม
+// mode 'white': เก็บเฉพาะพิกเซลขาว/เทาอ่อนที่ "ไม่มีสี" (ตัวหนังสือสีขาวบนปุ่มสีเข้ม) เป็นตัวดำบนพื้นขาว — Tesseract อ่านตัวขาวบนพื้นเข้มไม่ออก
+// ค่าที่ทดสอบแล้ว (หน้าต่างเล็กแบบจัดเรียง 2×2 และหน้าต่างใหญ่): สว่าง > 160, ต่างสี < 30
+//  - สว่าง > 185 อ่านหน้าต่างเล็กไม่ได้เลย (ตัวหนังสือบาง ขอบเทา ถูกตัดทิ้ง)
+//  - ต่างสี < 30 กันพื้นสีครีมของแผงในเกมไม่ให้กลายเป็นตัวหนังสือ
+// ขยายภาพให้ได้ ~2 พิกเซลภาพต่อ 1 CSS px เสมอ (หน้าต่างเล็กที่เกมย่อภาพ → ขยาย ~3 เท่า, หน้าต่างใหญ่ → ~2 เท่า)
+// ขยายตายตัว 3 เท่ากับหน้าต่างเต็มจอทำให้ภาพใหญ่ ~5800×3000 และช้ามาก (~19 วินาที)
+const OCR_TARGET_SCALE = 2, WHITE_MIN = 160, WHITE_SPREAD = 30;
+async function captureGame(mode) {
+  const wc = gameView?.webContents;
+  if (!wc || wc.isDestroyed()) throw new Error('เกมยังไม่พร้อม');
+  const img = await wc.capturePage();
+  if (img.isEmpty()) throw new Error('จับภาพหน้าเกมไม่ได้');
+  const [cssW, cssH] = await wc.executeJavaScript('[innerWidth, innerHeight]');
+  const { width, height } = img.getSize();
+  // ปัดเป็นจำนวนเต็ม: ขยายแบบเศษ (เช่น 3.14 เท่า) ทำให้ขอบตัวหนังสือเบลอ ความมั่นใจ OCR ตกจาก ~92% เหลือ ~14%
+  const up = Math.min(4, Math.max(1, Math.round(OCR_TARGET_SCALE / (width / cssW))));
+  let big = img.resize({ width: Math.round(width * up), height: Math.round(height * up), quality: 'best' });
+  if (mode === 'white') {
+    const size = big.getSize();
+    const px = big.toBitmap(); // BGRA
+    for (let i = 0; i < px.length; i += 4) {
+      const mx = Math.max(px[i], px[i + 1], px[i + 2]), mn = Math.min(px[i], px[i + 1], px[i + 2]);
+      const v = mn > WHITE_MIN && mx - mn < WHITE_SPREAD ? 0 : 255;
+      px[i] = px[i + 1] = px[i + 2] = v;
+      px[i + 3] = 255;
+    }
+    big = nativeImage.createFromBitmap(px, size);
+  }
+  return { png: big.toPNG(), scale: big.getSize().width / cssW, cssW, cssH };
+}
+
+// คลิกซ้าย 1 ครั้งที่ตำแหน่ง (x, y) เป็น CSS px ของหน้าเกม ผ่าน CDP — ใช้ได้แม้หน้าต่างซ่อน/ไม่ได้โฟกัส
+// หาปุ่ม/องค์ประกอบในหน้าเกมจาก id (อ่านอย่างเดียว ไม่แก้หน้าเกม) — คืนข้อความ ตำแหน่งกึ่งกลาง (CSS px) และว่ามองเห็นอยู่ไหม
+// ใช้แทน OCR เมื่อปุ่มเป็น HTML จริง (เช่น #bot-battery-saver) — เร็วกว่าและไม่ขึ้นกับขนาดหน้าต่าง/สีปุ่ม
+async function findElement(id) {
+  if (!/^[\w-]{1,64}$/.test(id || '')) throw new Error('invalid element id');
+  const wc = gameView?.webContents;
+  if (!wc || wc.isDestroyed()) throw new Error('เกมยังไม่พร้อม');
+  return wc.executeJavaScript(`(() => {
+    const el = document.getElementById(${JSON.stringify(id)});
+    if (!el) return { found: false };
+    const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+    // ไม่ใช้ offsetParent: องค์ประกอบ position:fixed มี offsetParent = null แม้แสดงอยู่ (เคยทำให้ตรวจหน้าประหยัดพลังงานผิด)
+    const visible = r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && s.opacity !== '0'
+      && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
+    return { found: true, visible, text: el.textContent.trim().slice(0, 100), x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+}
+
+async function clickAt(params) {
+  const x = Number(params.get('x')), y = Number(params.get('y'));
+  const wc = gameView?.webContents;
+  if (!wc || wc.isDestroyed() || !wc.debugger.isAttached()) throw new Error('เกมยังโหลดไม่เสร็จ');
+  const [w, h] = await wc.executeJavaScript('[innerWidth, innerHeight]');
+  if (!(x >= 0 && y >= 0 && x < w && y < h)) throw new Error('ตำแหน่งคลิกอยู่นอกหน้าเกม');
+  const send = (type, extra) => wc.debugger.sendCommand('Input.dispatchMouseEvent', { type, x, y, ...extra });
+  await send('mouseMoved', {});
+  await send('mousePressed', { button: 'left', buttons: 1, clickCount: 1 });
+  await send('mouseReleased', { button: 'left', buttons: 0, clickCount: 1 });
 }
 
 let globalHide = false;
@@ -362,7 +441,7 @@ function registerGlobalHide() {
 const actions = {
   pip: togglePiP, fullscreen: toggleFullscreen, refresh, mute: toggleMute, muteSet: setMute, focus,
   hide: () => setHidden(true), show: focus, toggleHide: toggleHidden, quit: () => app.quit(), tile,
-  title: setTitle, fps: setFps, key: pressKey,
+  title: setTitle, fps: setFps, key: pressKey, click: clickAt,
 };
 
 function startControlServer() {
@@ -372,6 +451,22 @@ function startControlServer() {
     if (req.headers['x-lumivara'] !== '1' || !/^(127\.0\.0\.1|localhost):\d+$/.test(req.headers.host || '')) return send(403, { ok: false });
     if (req.method === 'GET' && req.url === '/state') return send(200, state());
     if (req.method === 'GET' && req.url === '/displays') return send(200, displays());
+    if (req.method === 'GET' && /^\/element(\?|$)/.test(req.url)) {
+      try {
+        return send(200, await findElement(new URL(req.url, 'http://127.0.0.1').searchParams.get('id')));
+      } catch (err) {
+        return send(400, { ok: false, error: String(err.message || err) });
+      }
+    }
+    if (req.method === 'GET' && /^\/capture(\?|$)/.test(req.url)) {
+      try {
+        const shot = await captureGame(new URL(req.url, 'http://127.0.0.1').searchParams.get('mode'));
+        res.writeHead(200, { 'Content-Type': 'image/png', 'X-Scale': String(shot.scale), 'X-Css-Size': `${shot.cssW}x${shot.cssH}` });
+        return res.end(shot.png);
+      } catch (err) {
+        return send(500, { ok: false, error: String(err.message || err) });
+      }
+    }
     const url = new URL(req.url, 'http://127.0.0.1');
     const m = url.pathname.match(/^\/action\/(\w+)$/);
     if (req.method !== 'POST' || !m || !Object.hasOwn(actions, m[1])) return send(404, { ok: false, error: 'not found' });
@@ -392,7 +487,7 @@ async function createApp() {
   if (onScreen(saved.pip)) lastPiPBounds = saved.pip;
   const normal = onScreen(saved.normal) ? saved.normal : { width: 1100, height: 750 };
   normalWindow = new BaseWindow({
-    icon: gameIcon, title, ...normal, minWidth: 320, minHeight: 240,
+    icon: gameIcon, title: windowTitle(), ...normal, minWidth: 320, minHeight: 240,
     autoHideMenuBar: true, backgroundColor: '#17294e', show: false,
   });
   normalWindow.setMenu(null);
@@ -411,7 +506,11 @@ async function createApp() {
   layout();
 
   gameView.webContents.on('page-title-updated', (e) => e.preventDefault());
-  gameView.webContents.on('did-finish-load', () => { layout(); applyFrameRate(); });
+  gameView.webContents.on('did-finish-load', () => {
+    layout();
+    applyFrameRate();
+    if (gameView.webContents.getURL().startsWith(gameUrl)) { loads++; botText = null; inSaver = false; }
+  });
   gameView.webContents.setWindowOpenHandler(({ url }) => (url.startsWith('https://')
     ? { action: 'allow', overrideBrowserWindowOptions: { webPreferences: { session: gameSession, backgroundThrottling: false, sandbox: true } } }
     : { action: 'deny' }));
